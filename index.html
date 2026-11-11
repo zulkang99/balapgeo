@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>BALAP GEOMETRI 3D: MISI LUAS BANGUN DATAR</title>
+    <script src="assets/js/tailwind.js"></script>
+    <script src="assets/js/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/game.css">
+    <link rel="stylesheet" href="assets/css/login.css">
+</head>
+<body class="text-white relative">
+<!-- ===== Halaman Login (data tidak disimpan) ===== -->
+<div id="login-page">
+  <form id="login-form" class="lg-card">
+    <span class="lg-badge">Game Edukasi Matematika</span>
+    <h1 class="lg-title">Balap Geometri 3D</h1>
+    <p class="lg-sub">Masukkan nama dan sekolahmu untuk mulai balapan.</p>
+    <label for="lg-nama">Nama Siswa</label>
+    <input id="lg-nama" maxlength="40" required placeholder="Contoh: Budi Santoso">
+    <label for="lg-sekolah">Asal Sekolah</label>
+    <input id="lg-sekolah" maxlength="60" required placeholder="Contoh: SD Negeri 1 Harapan">
+    <button type="submit" class="lg-btn">Mulai Balapan 🏁</button>
+    <p class="lg-note">Data tidak disimpan — hanya dipakai selama bermain.</p>
+    <button type="button" id="lg-info-btn" class="lg-btn-2">ℹ️ Informasi Pengembang</button>
+  </form>
+  <div id="lg-dialog" class="lg-overlay" role="dialog" aria-modal="true" hidden>
+    <div class="lg-modal">
+      <button type="button" class="lg-x" data-close aria-label="Tutup">✕</button>
+      <img src="assets/images/developer-profile.jpg" alt="Profil pengembang: Zulkifli, M.Pd">
+      <h2>Tentang Game Edukasi Ini</h2>
+      <p><strong>Balap Geometri 3D — Misi Luas Bangun Datar</strong> adalah game edukasi matematika bertema balap go-kart. Siswa mengendarai kart di lintasan 3D dan harus memilih gerbang jawaban yang benar untuk soal luas bangun datar.</p>
+      <ul>
+        <li>✅ Jawaban benar: kart mendapat tambahan kecepatan dan skor.</li>
+        <li>🐢 Jawaban salah: kart melambat, lalu jawaban yang benar ditampilkan.</li>
+        <li>📦 Kotak power-up berisi soal tantangan: jawab benar untuk nitro, jawab salah membuat kart melambat.</li>
+        <li>🏁 Balapan berlangsung beberapa lap; semakin banyak jawaban benar, semakin besar peluang menang.</li>
+      </ul>
+      <div class="lg-dev"><small>PENGEMBANG</small><b>Zulkifli, M.Pd</b><span>Guru Kelas — SDN 4 Banawa</span></div>
+      <button type="button" class="lg-btn" data-close>Tutup</button>
+    </div>
+  </div>
+</div>
+<button id="lg-exit" type="button" hidden>Keluar</button>
+<div id="loading-screen" style="position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:linear-gradient(180deg,#3d9bff,#8fd3ff 60%,#ffe3b8);font-family:Fredoka,sans-serif;color:#fff">
+  <div style="font-size:64px;animation:flashfx 1s infinite alternate">🏎️</div>
+  <div style="font-size:28px;font-weight:700;text-shadow:0 3px 0 #1e5fb4">Menyiapkan Arena Balap...</div>
+  <div style="width:min(420px,80vw);height:22px;border:3px solid #fff;border-radius:999px;background:#1e5fb455;overflow:hidden"><div id="load-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#ffd23f,#ff8a3d);transition:width .2s"></div></div>
+  <div id="load-pct" style="font-size:22px;font-weight:700">0%</div>
+</div>
+<style>#loading-screen.hidden{display:none!important}</style>
+
+    <!-- MOBILE PORTRAIT ORIENTATION WARNING OVERLAY -->
+    <div id="portrait-warning" class="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-lg flex-col items-center justify-center p-6 text-center">
+        <div class="text-6xl mb-4 animate-bounce">📱🔄</div>
+        <h2 class="font-display text-2xl font-bold text-amber-300 mb-2">PUTAR PERANGKAT KE MODE LANSKAP</h2>
+        <p class="text-sm text-slate-300 max-w-xs mb-5">
+            Untuk pengalaman terbaik di HP, putar layar secara mendatar (Lanskap) agar lintasan dan kontrol balap terlihat jelas.
+        </p>
+        <button onclick="document.getElementById('portrait-warning').style.setProperty('display', 'none', 'important')" class="btn-game bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-400/50 font-bold px-5 py-2.5 rounded-xl text-xs">
+            Tetap Lanjutkan
+        </button>
+    </div>
+
+    <!-- 3D WebGL Canvas -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Speed Lines Overlay during Turbo -->
+    <div id="turbo-overlay" class="pointer-events-none fixed inset-0 z-10 opacity-0 transition-opacity duration-300"
+         style="background: radial-gradient(circle, transparent 55%, rgba(56, 189, 248, 0.35) 100%); box-shadow: inset 0 0 80px rgba(250, 204, 21, 0.5);">
+    </div>
+
+    <!-- ================= HUD OVERLAY (SUPPORTS 1P FULL & 2P STRICT VERTICAL SPLIT) ================= -->
+    <div id="hud-container" class="fixed inset-0 z-20 pointer-events-none flex flex-col justify-between">
+        
+        <!-- 2-PLAYER SPLIT VIEWPORT FRAMES & INDEPENDENT HUD PANELS -->
+        <div id="split-layout-wrapper" class="w-full h-full flex relative">
+            
+            <!-- ================= LEFT SCREEN: PLAYER 1 ZONE ================= -->
+            <div id="p1-viewport-zone" class="w-full h-full flex flex-col justify-between p-1.5 sm:p-2.5 relative transition-all">
+                
+                <!-- P1 TOP AREA: Status Bar + Compact Utility Buttons + Question Strip -->
+                <div class="flex flex-col gap-1 w-full pointer-events-auto">
+                    <!-- P1 Header & Independent Function Buttons -->
+                    <div class="hud-panel rounded-xl px-2 py-1 flex items-center justify-between gap-1.5 border-l-4 border-l-rose-500">
+                        <div class="flex items-center gap-1.5 min-w-0">
+                            <div class="bg-gradient-to-br from-rose-500 to-amber-500 w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center font-display text-sm sm:text-base font-bold shadow-inner border border-amber-200 shrink-0" id="hud-pos">
+                                1<span class="text-[9px] font-normal">/4</span>
+                            </div>
+                            <div class="truncate">
+                                <div class="text-[9px] sm:text-[10px] uppercase tracking-wider text-rose-300 font-extrabold truncate" id="p1-header-label">PEMAIN 1 (WASD)</div>
+                                <div class="text-[10px] sm:text-xs font-bold text-amber-300 leading-tight truncate" id="hud-pos-label">Pemimpin!</div>
+                            </div>
+                        </div>
+
+                        <!-- Stats: Lap & Score -->
+                        <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+                            <div class="text-right">
+                                <div class="text-[8px] uppercase text-slate-400 font-bold">LAP</div>
+                                <div class="font-display text-xs sm:text-sm font-bold text-white" id="hud-lap">1/3</div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-[8px] uppercase text-slate-400 font-bold">SKOR</div>
+                                <div class="font-display text-xs sm:text-sm font-bold text-emerald-400" id="hud-score">0</div>
+                            </div>
+                            <span class="hidden lg:inline-block text-[9px] text-slate-300 bg-slate-800/90 px-1.5 py-0.5 rounded" id="hud-accuracy">100%</span>
+                        </div>
+
+                        <!-- P1 Own Function Buttons (Formula Book, Fullscreen, Settings Gear) -->
+                        <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                            <button onclick="openFormulaModal()" class="btn-game bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl px-2 sm:px-2.5 py-1 sm:py-1.5 text-[10px] sm:text-xs font-extrabold border border-amber-200 flex items-center gap-1" title="Buku Rumus">
+                                <span>📖</span> <span class="hidden md:inline">RUMUS</span>
+                            </button>
+                            <button onclick="toggleFullScreen()" class="btn-game bg-sky-600 hover:bg-sky-500 text-white px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl text-[10px] sm:text-xs font-extrabold border border-sky-300 flex items-center gap-1" title="Layar Penuh (Papan Interaktif / HP)">
+                                <span>⛶</span> <span class="hidden 2xl:inline">LAYAR PENUH</span>
+                            </button>
+                            <button onclick="openSettingsModal()" class="btn-game bg-slate-800 hover:bg-slate-700 text-amber-300 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl text-xs sm:text-sm font-extrabold border border-slate-500 flex items-center gap-1" title="Pengaturan & Menu">
+                                <span>⚙️</span> <span class="hidden xl:inline text-[11px]">MENU</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- P1 Question Banner (Compact & Docked High so 3D Gates are clear) -->
+                    <div id="question-banner" class="hud-panel-gold rounded-xl px-2 py-1 w-full flex items-center gap-2 shadow-lg bg-slate-950/75 border-rose-400/80">
+                        <div id="question-svg-box" class="w-10 h-10 sm:w-11 sm:h-11 bg-slate-900/90 rounded-lg border border-slate-700 flex items-center justify-center shrink-0 p-0.5">
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between gap-1">
+                                <span id="question-shape-badge" class="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-rose-500 text-white">SOAL P1</span>
+                                <span class="text-[9px] sm:text-[10px] font-bold text-sky-300" id="hud-gate-dist">Gerbang: 120m</span>
+                            </div>
+                            <p id="question-text" class="text-[10px] sm:text-xs font-bold text-white leading-tight truncate mt-0.5">
+                                Bersiap melewati gerbang soal!
+                            </p>
+                            <div class="flex items-center justify-between mt-0.5">
+                                <span id="question-hint" class="text-[9px] sm:text-[10px] text-amber-300 font-semibold truncate">Rumus: L = s × s</span>
+                                <span class="text-[9px] font-bold text-emerald-300 shrink-0">Pilih Gerbang ⬆️</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- P1 Feedback Toast -->
+                    <div id="feedback-toast" class="hidden px-2 py-0.5 rounded-lg font-bold text-[10px] sm:text-[11px] shadow-md border transition-all duration-300 text-center"></div>
+                </div>
+
+                <!-- P1 INDEPENDENT POWER-UP QUIZ OVERLAY (Only covers P1 side & only slows P1!) -->
+                <div id="quiz-overlay-p1" class="hidden pointer-events-auto my-auto mx-auto w-full max-w-md z-30">
+                    <div class="hud-panel-gold rounded-2xl p-2.5 sm:p-4 text-center border-2 border-rose-400 shadow-[0_0_30px_rgba(244,63,94,0.45)] bg-slate-950/90">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="px-2 py-0.5 rounded-full bg-rose-500/30 border border-rose-400 text-rose-200 text-[9px] sm:text-[10px] font-extrabold uppercase">
+                                ⚡ KUIS POWER-UP P1 (SLOW-MO P1)
+                            </span>
+                            <span class="text-[9px] sm:text-[10px] font-bold text-amber-300">Sentuh Jawaban / Tekan 1, 2, 3!</span>
+                        </div>
+                        <div class="bg-slate-900/95 rounded-xl p-2 sm:p-2.5 border border-slate-700 flex items-center gap-2.5 mb-2 text-left">
+                            <div id="quiz-p1-svg" class="w-12 h-12 sm:w-16 sm:h-16 bg-slate-950 rounded-lg border border-slate-800 flex items-center justify-center shrink-0 p-1"></div>
+                            <div class="min-w-0 flex-1">
+                                <div id="quiz-p1-title" class="text-[10px] font-extrabold uppercase text-amber-400">TRAPESIUM</div>
+                                <p id="quiz-p1-question" class="text-[11px] sm:text-sm font-bold text-white leading-snug"></p>
+                                <p id="quiz-p1-formula" class="text-[10px] text-sky-300 mt-0.5 font-semibold"></p>
+                            </div>
+                        </div>
+                        <div id="quiz-p1-options" class="grid grid-cols-3 gap-2"></div>
+                    </div>
+                </div>
+
+                <!-- P1 BOTTOM AREA: Controls, Power-Up & Speedometer (Structured so nothing overlaps) -->
+                <div class="flex justify-between items-end gap-2 w-full mt-auto pointer-events-auto">
+                    <div class="flex flex-col gap-1 sm:gap-1.5 min-w-0">
+                        <!-- P1 Power-Up Button -->
+                        <button id="btn-powerup" onclick="triggerPowerUpQuiz(0)" class="btn-game hud-panel rounded-xl p-1 sm:p-2 flex items-center gap-2 text-left border border-slate-600/60 w-40 sm:w-56 transition-all">
+                            <div id="powerup-icon" class="w-7 h-7 sm:w-9 sm:h-9 rounded-lg bg-slate-800 border border-slate-600 flex items-center justify-center text-sm sm:text-lg shrink-0">
+                                🎁
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="text-[8px] sm:text-[10px] font-extrabold uppercase tracking-wider text-rose-400">POWER-UP P1 (SENTUH / E)</div>
+                                <div id="powerup-status" class="text-[9px] sm:text-xs font-bold text-slate-300 truncate">Ambil Kotak Misteri!</div>
+                            </div>
+                        </button>
+
+                        <!-- P1 Interactive Board & Mobile Touch Controls (Multi-Touch Friendly Targets) -->
+                        <div class="flex items-center gap-1 sm:gap-1.5">
+                            <button id="touch-left" class="touch-btn w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center text-base sm:text-xl font-extrabold active:scale-95" aria-label="P1 Belok Kiri">
+                                ◀
+                            </button>
+                            <button id="touch-right" class="touch-btn w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center text-base sm:text-xl font-extrabold active:scale-95" aria-label="P1 Belok Kanan">
+                                ▶
+                            </button>
+                            <button id="touch-drift" class="touch-btn px-2.5 sm:px-3 h-11 sm:h-14 rounded-2xl flex flex-col items-center justify-center text-[8px] sm:text-[10px] font-extrabold text-sky-300 border-sky-400/50">
+                                <span class="text-xs sm:text-base leading-none">💨</span>
+                                <span>DRIFT</span>
+                            </button>
+                            <button id="touch-brake" class="touch-btn px-2.5 sm:px-3 h-11 sm:h-14 rounded-2xl flex flex-col items-center justify-center text-[8px] sm:text-[10px] font-extrabold text-rose-300 border-rose-400/50">
+                                <span class="text-xs sm:text-base leading-none">🛑</span>
+                                <span>REM</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- P1 Speedometer & RPM (Positioned with safe margin from center divider) -->
+                    <div class="hud-panel rounded-xl p-1.5 sm:p-2.5 w-24 sm:w-36 flex flex-col justify-between shrink-0 border-r-4 border-r-rose-500">
+                        <div class="flex items-baseline justify-between">
+                            <span class="font-display text-lg sm:text-2xl font-bold text-rose-400" id="hud-speed">0</span>
+                            <span class="text-[8px] sm:text-[10px] font-extrabold text-slate-300">KM/J</span>
+                        </div>
+                        <div class="mt-0.5">
+                            <div class="flex justify-between text-[8px] sm:text-[9px] font-bold text-slate-300 mb-0.5">
+                                <span>DRIFT</span>
+                                <span id="drift-status-text" class="text-amber-400">0%</span>
+                            </div>
+                            <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+                                <div id="drift-bar" class="h-full bg-gradient-to-r from-sky-400 via-amber-400 to-rose-500 w-0 transition-all duration-75"></div>
+                            </div>
+                        </div>
+                        <div class="mt-1 flex items-center justify-between text-[9px] text-emerald-300 font-bold bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                            <span id="gear-badge-p1">⚙️ GIGI 1</span>
+                            <span id="boost-badge" class="hidden text-amber-300 animate-pulse">🔥 NITRO</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= VERTICAL SPLIT DIVIDER ================= -->
+            <div id="split-divider" class="hidden pointer-events-none relative w-1.5 bg-gradient-to-b from-rose-500 via-amber-400 to-sky-500 z-30 shadow-[0_0_20px_rgba(251,191,36,0.95)] shrink-0">
+                <!-- VS Badge -->
+                <div class="absolute top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 bg-slate-950 border-2 border-amber-400 text-amber-300 font-display text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-lg">
+                    VS
+                </div>
+            </div>
+
+            <!-- FLOATING GLOBAL TIMER & RADAR (Docked cleanly at middle-right in 1P or center-middle on split line in 2P so it NEVER overlaps bottom RPM/Speedometer or top Question Banners) -->
+            <div id="shared-center-cluster" class="pointer-events-auto fixed right-3 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-1 transition-all duration-200">
+                <div class="hud-panel rounded-2xl p-1.5 flex flex-col items-center gap-1 border-2 border-amber-400/50 bg-slate-950/90 shadow-2xl">
+                    <canvas id="minimap-canvas" width="68" height="68" class="rounded-xl bg-slate-900 border border-slate-700"></canvas>
+                    <div class="px-1.5 text-center">
+                        <div class="text-[8px] uppercase tracking-wider text-amber-300 font-extrabold">⏱️ WAKTU</div>
+                        <div class="font-display text-xs sm:text-sm font-bold text-white tracking-wider leading-tight" id="hud-time">00:00.00</div>
+                        <div class="text-[7px] text-sky-300 font-extrabold uppercase mt-0.5" id="mode-indicator-badge">1 PEMAIN</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= RIGHT SCREEN: PLAYER 2 ZONE (VISIBLE IN 2P MODE) ================= -->
+            <div id="p2-viewport-zone" class="hidden w-1/2 h-full flex-col justify-between p-1.5 sm:p-2.5 relative border-l border-sky-400/30">
+                
+                <!-- P2 TOP AREA: Status Bar + P2 Function Buttons + Question Strip -->
+                <div class="flex flex-col gap-1 w-full pointer-events-auto">
+                    <div class="hud-panel rounded-xl px-2 py-1 flex items-center justify-between gap-1.5 border-r-4 border-r-sky-400">
+                        <div class="flex items-center gap-1.5 min-w-0">
+                            <div class="bg-gradient-to-br from-sky-400 to-blue-600 w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center font-display text-sm sm:text-base font-bold shadow-inner border border-sky-200 shrink-0" id="hud-pos-p2">
+                                2<span class="text-[9px] font-normal">/4</span>
+                            </div>
+                            <div class="truncate">
+                                <div class="text-[9px] sm:text-[10px] uppercase tracking-wider text-sky-300 font-extrabold truncate">PEMAIN 2 (SENTUH / PANAH)</div>
+                                <div class="text-[10px] sm:text-xs font-bold text-amber-300 leading-tight truncate" id="hud-pos-label-p2">Siap Balap!</div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+                            <div class="text-right">
+                                <div class="text-[8px] uppercase text-slate-400 font-bold">LAP</div>
+                                <div class="font-display text-xs sm:text-sm font-bold text-white" id="hud-lap-p2">1/3</div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-[8px] uppercase text-slate-400 font-bold">SKOR</div>
+                                <div class="font-display text-xs sm:text-sm font-bold text-emerald-400" id="hud-score-p2">0</div>
+                            </div>
+                        </div>
+
+                        <!-- P2 Own Function Buttons (Formula Book & Settings Gear) -->
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <button onclick="openFormulaModal()" class="btn-game bg-sky-500 hover:bg-sky-400 text-slate-950 rounded-xl px-2.5 py-1.5 text-[11px] sm:text-xs font-extrabold border border-sky-200 flex items-center gap-1" title="Buku Rumus">
+                                <span>📖</span> <span class="hidden md:inline">RUMUS</span>
+                            </button>
+                            <button onclick="openSettingsModal()" class="btn-game bg-slate-800 hover:bg-slate-700 text-sky-300 px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-extrabold border border-slate-500 flex items-center gap-1" title="Pengaturan & Menu">
+                                <span>⚙️</span> <span class="hidden xl:inline text-[11px]">MENU</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- P2 Question Banner -->
+                    <div id="question-banner-p2" class="hud-panel-gold rounded-xl px-2 py-1 w-full flex items-center gap-2 shadow-lg bg-slate-950/75 border-sky-400/80">
+                        <div id="question-svg-box-p2" class="w-10 h-10 sm:w-11 sm:h-11 bg-slate-900/90 rounded-lg border border-slate-700 flex items-center justify-center shrink-0 p-0.5">
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between gap-1">
+                                <span id="question-shape-badge-p2" class="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-sky-400 text-slate-950">SOAL P2</span>
+                                <span class="text-[9px] sm:text-[10px] font-bold text-sky-300" id="hud-gate-dist-p2">Gerbang: 120m</span>
+                            </div>
+                            <p id="question-text-p2" class="text-[10px] sm:text-xs font-bold text-white leading-tight truncate mt-0.5">
+                                Bersiap melewati gerbang soal!
+                            </p>
+                            <div class="flex items-center justify-between mt-0.5">
+                                <span id="question-hint-p2" class="text-[9px] sm:text-[10px] text-amber-300 font-semibold truncate">Rumus: L = s × s</span>
+                                <span class="text-[9px] font-bold text-emerald-300 shrink-0">Pilih Gerbang ⬆️</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- P2 Feedback Toast -->
+                    <div id="feedback-toast-p2" class="hidden px-2 py-0.5 rounded-lg font-bold text-[10px] sm:text-[11px] shadow-md border transition-all duration-300 text-center"></div>
+                </div>
+
+                <!-- P2 INDEPENDENT POWER-UP QUIZ OVERLAY (Only covers P2 side & only slows P2!) -->
+                <div id="quiz-overlay-p2" class="hidden pointer-events-auto my-auto mx-auto w-full max-w-md z-30">
+                    <div class="hud-panel-gold rounded-2xl p-3 sm:p-4 text-center border-2 border-sky-400 shadow-[0_0_30px_rgba(56,189,248,0.45)] bg-slate-950/90">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="px-2 py-0.5 rounded-full bg-sky-500/30 border border-sky-400 text-sky-200 text-[9px] sm:text-[10px] font-extrabold uppercase">
+                                ⚡ KUIS POWER-UP P2 (SLOW-MO P2)
+                            </span>
+                            <span class="text-[9px] sm:text-[10px] font-bold text-amber-300">Tekan Angka 8 / 9 / 0 atau Klik!</span>
+                        </div>
+                        <div class="bg-slate-900/95 rounded-xl p-2.5 border border-slate-700 flex items-center gap-2.5 mb-2.5 text-left">
+                            <div id="quiz-p2-svg" class="w-16 h-16 sm:w-20 sm:h-20 bg-slate-950 rounded-lg border border-slate-800 flex items-center justify-center shrink-0 p-1"></div>
+                            <div class="min-w-0 flex-1">
+                                <div id="quiz-p2-title" class="text-[10px] font-extrabold uppercase text-amber-400">TRAPESIUM</div>
+                                <p id="quiz-p2-question" class="text-xs sm:text-sm font-bold text-white leading-snug"></p>
+                                <p id="quiz-p2-formula" class="text-[10px] text-sky-300 mt-0.5 font-semibold"></p>
+                            </div>
+                        </div>
+                        <div id="quiz-p2-options" class="grid grid-cols-3 gap-2"></div>
+                    </div>
+                </div>
+
+                <!-- P2 BOTTOM AREA: Speedometer & Controls (No overlap with center Minimap) -->
+                <div class="flex justify-between items-end gap-2 w-full mt-auto pointer-events-auto">
+                    <!-- P2 Speedometer & RPM -->
+                    <div class="hud-panel rounded-xl p-2 sm:p-2.5 w-28 sm:w-36 flex flex-col justify-between shrink-0 border-l-4 border-l-sky-400">
+                        <div class="flex items-baseline justify-between">
+                            <span class="font-display text-xl sm:text-2xl font-bold text-sky-400" id="hud-speed-p2">0</span>
+                            <span class="text-[9px] sm:text-[10px] font-extrabold text-slate-300">KM/J</span>
+                        </div>
+                        <div class="mt-0.5">
+                            <div class="flex justify-between text-[8px] sm:text-[9px] font-bold text-slate-300 mb-0.5">
+                                <span>DRIFT</span>
+                                <span id="drift-status-text-p2" class="text-amber-400">0%</span>
+                            </div>
+                            <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+                                <div id="drift-bar-p2" class="h-full bg-gradient-to-r from-sky-400 via-amber-400 to-rose-500 w-0 transition-all duration-75"></div>
+                            </div>
+                        </div>
+                        <div class="mt-1 flex items-center justify-between text-[9px] text-sky-300 font-bold bg-sky-950/60 px-1.5 py-0.5 rounded border border-sky-500/30">
+                            <span id="gear-badge-p2">⚙️ GIGI 1</span>
+                            <span id="boost-badge-p2" class="hidden text-amber-300 animate-pulse">🔥 NITRO</span>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col gap-1.5 items-end min-w-0">
+                        <!-- P2 Power-Up Button -->
+                        <button id="btn-powerup-p2" onclick="triggerPowerUpQuiz(1)" class="btn-game hud-panel rounded-xl p-1.5 sm:p-2 flex items-center gap-2 text-left border border-slate-600/60 w-44 sm:w-56 transition-all">
+                            <div id="powerup-icon-p2" class="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-slate-800 border border-slate-600 flex items-center justify-center text-base sm:text-lg shrink-0">
+                                🎁
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="text-[9px] sm:text-[10px] font-extrabold uppercase tracking-wider text-sky-400">POWER-UP P2 (KLIK / ENTER)</div>
+                                <div id="powerup-status-p2" class="text-[10px] sm:text-xs font-bold text-slate-300 truncate">Ambil Kotak Misteri!</div>
+                            </div>
+                        </button>
+
+                        <!-- P2 Interactive Board Touch Controls (Large Multi-Touch Friendly Targets) -->
+                        <div class="flex items-center gap-1.5">
+                            <button id="touch-left-p2" class="touch-btn w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center text-lg sm:text-xl font-extrabold active:scale-95" aria-label="P2 Belok Kiri">
+                                ◀
+                            </button>
+                            <button id="touch-right-p2" class="touch-btn w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center text-lg sm:text-xl font-extrabold active:scale-95" aria-label="P2 Belok Kanan">
+                                ▶
+                            </button>
+                            <button id="touch-drift-p2" class="touch-btn px-3 h-12 sm:h-14 rounded-2xl flex flex-col items-center justify-center text-[9px] sm:text-[10px] font-extrabold text-sky-300 border-sky-400/50">
+                                <span class="text-sm sm:text-base">💨</span>
+                                <span>DRIFT</span>
+                            </button>
+                            <button id="touch-brake-p2" class="touch-btn px-3 h-12 sm:h-14 rounded-2xl flex flex-col items-center justify-center text-[9px] sm:text-[10px] font-extrabold text-rose-300 border-rose-400/50">
+                                <span class="text-sm sm:text-base">🛑</span>
+                                <span>REM</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- CENTER COUNTDOWN / NOTIFICATION -->
+        <div id="center-announcement" class="pointer-events-none fixed inset-0 flex items-center justify-center z-40 hidden">
+            <div id="countdown-text" class="font-display text-7xl sm:text-9xl font-extrabold text-amber-400 drop-shadow-[0_8px_16px_rgba(0,0,0,0.8)] animate-bounce">
+                3
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= START SCREEN MODAL ================= -->
+    <div id="start-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4">
+        <div class="hud-panel-gold rounded-3xl max-w-2xl w-full p-5 sm:p-7 text-center relative overflow-y-auto max-h-[95vh]">
+            <div class="inline-block px-4 py-1 rounded-full bg-amber-400/20 border border-amber-400 text-amber-300 text-xs font-extrabold uppercase tracking-widest mb-2">
+                Game Edukasi Matematika 3D Interaktif
+            </div>
+            <h1 class="font-display text-3xl sm:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-200 to-sky-300 drop-shadow">
+                BALAP GEOMETRI 3D
+            </h1>
+            <p class="text-sm sm:text-base text-sky-200 font-bold mt-1 mb-4">
+                Misi Luas Bangun Datar (Segi Empat & Segi Tiga)
+            </p>
+            <div id="student-greeting" class="hidden mb-4 text-sm text-amber-100 font-bold"></div>
+
+            <!-- Player Mode Selector (1 Player vs 2 Players Vertical Split-Screen) -->
+            <div class="mb-4 bg-slate-900/90 border border-slate-700 rounded-2xl p-3">
+                <label class="block text-xs font-extrabold uppercase tracking-wider text-amber-300 mb-2">🎮 PILIH JUMLAH PEMAIN (MODE LAYAR):</label>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <button onclick="selectPlayerCount(1)" id="mode-1p" class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm border-2 border-amber-400 bg-amber-500 text-slate-950 flex items-center justify-center gap-2 transition-all">
+                        <span>👤 1 PEMAIN (Layar Penuh)</span>
+                    </button>
+                    <button onclick="selectPlayerCount(2)" id="mode-2p" class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm border-2 border-slate-600 bg-slate-800 text-slate-200 flex items-center justify-center gap-2 transition-all">
+                        <span>👥 2 PEMAIN (Split-Screen Vertikal)</span>
+                    </button>
+                </div>
+                <!-- Detailed 2-Player Split Screen Preview & Controls Box (No element overlap) -->
+                <div id="split-controls-info" class="hidden mt-3 pt-2.5 border-t border-slate-700 text-[11px] text-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-left">
+                    <div class="bg-rose-950/60 border-2 border-rose-500/50 rounded-xl p-2.5 flex flex-col justify-between">
+                        <div>
+                            <div class="font-extrabold text-rose-300 text-xs flex items-center justify-between">
+                                <span>🏎️ LAYAR KIRI: PEMAIN 1</span>
+                                <span class="bg-rose-500 text-white px-1.5 py-0.5 rounded text-[9px]">MOBIL MERAH</span>
+                            </div>
+                            <ul class="mt-1.5 space-y-0.5 text-[11px] text-slate-300">
+                                <li>• <b>Belok Kiri / Kanan:</b> Tombol <b>A / D</b></li>
+                                <li>• <b>Rem & Drift:</b> Tombol <b>S</b> & <b>Spasi / C</b></li>
+                                <li>• <b>Aktifkan Kuis Power-Up:</b> <b>E / Shift Kiri</b></li>
+                                <li>• <b>Jawab Cepat Kuis P1:</b> Tombol <b>1 / 2 / 3</b></li>
+                            </ul>
+                        </div>
+                        <div class="mt-2 text-[10px] text-emerald-300 font-bold bg-slate-900/80 px-2 py-1 rounded">
+                            ✓ Kuis Power-Up mandiri (tidak memperlambat Pemain 2)
+                        </div>
+                    </div>
+                    <div class="bg-sky-950/60 border-2 border-sky-400/50 rounded-xl p-2.5 flex flex-col justify-between">
+                        <div>
+                            <div class="font-extrabold text-sky-300 text-xs flex items-center justify-between">
+                                <span>🏎️ LAYAR KANAN: PEMAIN 2</span>
+                                <span class="bg-sky-400 text-slate-950 px-1.5 py-0.5 rounded text-[9px]">MOBIL BIRU</span>
+                            </div>
+                            <ul class="mt-1.5 space-y-0.5 text-[11px] text-slate-300">
+                                <li>• <b>Belok Kiri / Kanan:</b> <b>Panah ◀ / ▶</b></li>
+                                <li>• <b>Rem & Drift:</b> <b>Panah ▼</b> & <b>M / Shift Kanan</b></li>
+                                <li>• <b>Aktifkan Kuis Power-Up:</b> <b>Enter</b></li>
+                                <li>• <b>Jawab Cepat Kuis P2:</b> Tombol <b>8 / 9 / 0</b></li>
+                            </ul>
+                        </div>
+                        <div class="mt-2 text-[10px] text-emerald-300 font-bold bg-slate-900/80 px-2 py-1 rounded">
+                            ✓ Kamera Jauh Tetap, Buku Rumus & Indikator terpisah
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- How to Play Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-left mb-4">
+                <div class="bg-slate-900/90 border border-slate-700 rounded-2xl p-3">
+                    <div class="text-xl mb-0.5">⛩️</div>
+                    <div class="font-bold text-amber-300 text-xs sm:text-sm">1. Terobos Gerbang Benar</div>
+                    <p class="text-[11px] text-slate-300 mt-0.5">Lihat soal di sudut atas, lalu tabrak <b>Gerbang Jawaban Benar</b> di jalan untuk mendapat <b>Turbo Boost</b>!</p>
+                </div>
+                <div class="bg-slate-900/90 border border-slate-700 rounded-2xl p-3">
+                    <div class="text-xl mb-0.5">🎁</div>
+                    <div class="font-bold text-sky-300 text-xs sm:text-sm">2. Kuis Kotak Misteri</div>
+                    <p class="text-[11px] text-slate-300 mt-0.5">Ambil kubus hadiah, aktifkan <b>Power-Up Kuis</b> untuk menembakkan <b>Rudal Geometri & Super Nitro</b>!</p>
+                </div>
+                <div class="bg-slate-900/90 border border-slate-700 rounded-2xl p-3">
+                    <div class="text-xl mb-0.5">📖</div>
+                    <div class="font-bold text-emerald-300 text-xs sm:text-sm">3. Kuasai 6 Rumus Luas</div>
+                    <p class="text-[11px] text-slate-300 mt-0.5">Persegi, Persegi Panjang, Segitiga, Jajar Genjang, Trapesium, Belah Ketupat & Layang-layang.</p>
+                </div>
+            </div>
+
+            <!-- Difficulty Selector -->
+            <div class="mb-5">
+                <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-300 mb-2">PILIH KECEPATAN & TINGKAT KESULITAN:</label>
+                <div class="flex justify-center gap-3">
+                    <button onclick="selectDifficulty('easy')" id="diff-easy" class="diff-btn px-4 py-2 rounded-xl font-bold text-xs sm:text-sm border-2 border-emerald-400 bg-emerald-500/30 text-white">
+                        🌱 Santai (Mudah)
+                    </button>
+                    <button onclick="selectDifficulty('normal')" id="diff-normal" class="diff-btn px-4 py-2 rounded-xl font-bold text-xs sm:text-sm border-2 border-amber-400 bg-amber-500 text-slate-950">
+                        🏎️ Standar (Sedang)
+                    </button>
+                    <button onclick="selectDifficulty('hard')" id="diff-hard" class="diff-btn px-4 py-2 rounded-xl font-bold text-xs sm:text-sm border-2 border-slate-600 bg-slate-800 text-slate-300">
+                        🔥 Juara (Cepat)
+                    </button>
+                </div>
+            </div>
+
+            <!-- Start Screen Action Buttons -->
+            <div class="flex flex-col sm:flex-row justify-center gap-2.5 sm:gap-3">
+                <button onclick="openFormulaModal()" class="btn-game bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-400/50 font-extrabold px-5 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2">
+                    <span>📖</span> Pelajari Buku Rumus
+                </button>
+                <button onclick="toggleFullScreen()" class="btn-game bg-sky-700 hover:bg-sky-600 text-white border border-sky-400/50 font-extrabold px-5 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2">
+                    <span>⛶</span> Mode Layar Penuh
+                </button>
+                <button onclick="startRace()" class="btn-game bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-display font-bold px-7 py-2.5 sm:py-3 rounded-2xl text-base sm:text-lg flex items-center justify-center gap-2 shadow-lg animate-pulse-fast">
+                    <span>🚦</span> MULAI BALAPAN!
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= FORMULA BOOK MODAL (BUKU RUMUS) ================= -->
+    <div id="formula-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/85 backdrop-blur-md p-3 sm:p-6">
+        <div class="hud-panel rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col border-2 border-amber-400 overflow-hidden">
+            <div class="p-4 sm:p-5 bg-slate-900/90 border-b border-slate-700 flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <span class="text-2xl">📖</span>
+                    <div>
+                        <h2 class="font-display text-xl sm:text-2xl font-bold text-amber-300">BUKU PANDUAN RUMUS LUAS BANGUN DATAR</h2>
+                        <p class="text-xs text-slate-300">Pelajari rumus luas segi empat dan segitiga untuk menaklukkan sirkuit!</p>
+                    </div>
+                </div>
+                <button onclick="closeFormulaModal()" class="btn-game bg-rose-600 hover:bg-rose-500 text-white font-bold px-4 py-2 rounded-xl text-xs sm:text-sm">
+                    ✕ TUTUP
+                </button>
+            </div>
+
+            <div class="p-4 sm:p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- 1. Persegi -->
+                <div class="bg-slate-900/90 border border-slate-700 rounded-2xl p-4 flex gap-4 items-center">
+                    <div class="w-24 h-24 bg-slate-950 rounded-xl flex items-center justify-center shrink-0 border border-slate-800">
+                        <svg viewBox="0 0 100 100" class="w-20 h-20">
+                            <rect x="20" y="20" width="60" height="60" fill="rgba(56,189,248,0.25)" stroke="#38bdf8" stroke-width="3"/>
+                            <text x="50" y="94" fill="#fbbf24" font-size="13" font-weight="bold" text-anchor="middle">s = 6 cm</text>
+                            <text x="50" y="55" fill="#fff" font-size="12" font-weight="bold" text-anchor="middle">Persegi</text>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-sky-300 text-base">1. Persegi</h3>
+                        <div class="text-xs font-extrabold bg-sky-500/20 border border-sky-400/40 text-sky-200 px-2.5 py-1 rounded-lg inline-block my-1">
+                            Luas = sisi × sisi (s × s)
+                        </div>
+                        <p class="text-xs text-slate-300">Contoh: Jika sisi <b class="text-white">s = 6 cm</b>, maka:<br>Luas = 6 × 6 = <b class="text-emerald-400">36 cm²</b></p>
+                    </div>
+                </div>
+
+                <!-- 2. Persegi Panjang -->
+                <div class="bg-slate-900/90 border border-slate-700 rounded-2xl p-4 flex gap-4 items-center">
+                    <div class="w-24 h-24 bg-slate-950 rounded-xl flex items-center justify-center shrink-0 border border-slate-800">
+                        <svg viewBox="0 0 100 100" class="w-20 h-20">
+                            <rect x="12" y="28" width="76" height="44" fill="rgba(52,211,153,0.25)" stroke="#34d399" stroke-width="3"/>
+                            <text x="50" y="88" fill="#fbbf24" font-size="12" font-weight="bold" text-anchor="middle">p = 8 cm</text>
+                            <text x="50" y="54" fill="#fff" font-size="12" font-weight="bold" text-anchor="middle">l = 5 cm</text>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-emerald-300 text-base">2. Persegi Panjang</h3>
+                        <div class="text-xs font-extrabold bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 px-2.5 py-1 rounded-lg inline-block my-1">
+                            Luas = panjang × lebar (p × l)
+                        </div>
+                        <p class="text-xs text-slate-300">Contoh: Jika <b class="text-white">p = 8 cm</b> dan <b class="text-white">l = 5 cm</b>, maka:<br>Luas = 8 × 5 = <b class="text-emerald-400">40 cm²</b></p>
+                    </div>
+                </div>
+
+                <!-- 3. Segitiga -->
+                <div class="bg-slate-900/90 border border-slate-700 rounded-2xl p-4 flex gap-4 items-center">
+                    <div class="w-24 h-24 bg-slate-950 rounded-xl flex items-center justify-center shrink-0 border border-slate-800">
+                        <svg viewBox="0 0 100 100" class="w-20 h-20">
+                            <polygon points="50,16 16,76 84,76" fill="rgba(251,191,36,0.25)" stroke="#fbbf24" stroke-width="3"/>
+                            <line x1="50" y1="16" x2="50" y2="76" stroke="#f87171" stroke-width="2" stroke-dasharray="4"/>
+                            <text x="50" y="92" fill="#fbbf24" font-size="12" font-weight="bold" text-anchor="middle">a = 10 cm</text>
+                            <text x="66" y="55" fill="#fca5a5" font-size="11" font-weight="bold">t=6</text>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-amber-300 text-base">3. Segitiga</h3>
+                        <div class="text-xs font-extrabold bg-amber-500/20 border border-amber-400/40 text-amber-200 px-2.5 py-1 rounded-lg inline-block my-1">
+                            Luas = ½ × alas × tinggi (½ × a × t)
+                        </div>
+                        <p class="text-xs text-slate-300">Contoh: Jika <b class="text-white">a = 10 cm</b> dan <b class="text-white">t = 6 cm</b>, maka:<br>Luas = ½ × 10 × 6 = <b class="text-emerald-400">30 cm²</b></p>
+                    </div>
+                </div>
+
+                <!-- 4. Jajar Genjang -->
+                <div class="bg-slate-900/90 border border-slate-700 rounded-2xl p-4 flex gap-4 items-center">
+                    <div class="w-24 h-24 bg-slate-950 rounded-xl flex items-center justify-center shrink-0 border border-slate-800">
+                        <svg viewBox="0 0 100 100" class="w-20 h-20">
+                            <polygon points="28,24 88,24 72,74 12,74" fill="rgba(167,139,250,0.25)" stroke="#a78bfa" stroke-width="3"/>
+                            <line x1="28" y1="24" x2="28" y2="74" stroke="#f87171" stroke-width="2" stroke-dasharray="4"/>
+                            <text x="48" y="90" fill="#fbbf24" font-size="12" font-weight="bold" text-anchor="middle">a = 9 cm</text>
+                            <text x="44" y="54" fill="#fca5a5" font-size="11" font-weight="bold">t=4</text>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-purple-300 text-base">4. Jajar Genjang</h3>
+                        <div class="text-xs font-extrabold bg-purple-500/20 border border-purple-400/40 text-purple-200 px-2.5 py-1 rounded-lg inline-block my-1">
+                            Luas = alas × tinggi (a × t)
+                        </div>
+                        <p class="text-xs text-slate-300">Contoh: Jika <b class="text-white">a = 9 cm</b> dan <b class="text-white">t = 4 cm</b>, maka:<br>Luas = 9 × 4 = <b class="text-emerald-400">36 cm²</b></p>
+                    </div>
+                </div>
+
+                <!-- 5. Trapesium -->
+                <div class="bg-slate-900/90 border border-slate-700 rounded-2xl p-4 flex gap-4 items-center">
+                    <div class="w-24 h-24 bg-slate-950 rounded-xl flex items-center justify-center shrink-0 border border-slate-800">
+                        <svg viewBox="0 0 100 100" class="w-20 h-20">
+                            <polygon points="30,26 70,26 88,74 12,74" fill="rgba(244,114,182,0.25)" stroke="#f472b6" stroke-width="3"/>
+                            <line x1="30" y1="26" x2="30" y2="74" stroke="#f87171" stroke-width="2" stroke-dasharray="4"/>
+                            <text x="50" y="20" fill="#38bdf8" font-size="11" font-weight="bold" text-anchor="middle">a = 6</text>
+                            <text x="50" y="90" fill="#fbbf24" font-size="11" font-weight="bold" text-anchor="middle">b = 10</text>
+                            <text x="45" y="55" fill="#fca5a5" font-size="11" font-weight="bold">t=5</text>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-pink-300 text-base">5. Trapesium</h3>
+                        <div class="text-xs font-extrabold bg-pink-500/20 border border-pink-400/40 text-pink-200 px-2.5 py-1 rounded-lg inline-block my-1">
+                            Luas = ½ × (a + b) × t
+                        </div>
+                        <p class="text-xs text-slate-300">Jumlahkan sisi sejajar (a+b), bagi 2, lalu kali tinggi:<br>½ × (6 + 10) × 5 = 8 × 5 = <b class="text-emerald-400">40 cm²</b></p>
+                    </div>
+                </div>
+
+                <!-- 6. Belah Ketupat & Layang-layang -->
+                <div class="bg-slate-900/90 border border-slate-700 rounded-2xl p-4 flex gap-4 items-center">
+                    <div class="w-24 h-24 bg-slate-950 rounded-xl flex items-center justify-center shrink-0 border border-slate-800">
+                        <svg viewBox="0 0 100 100" class="w-20 h-20">
+                            <polygon points="50,14 86,50 50,86 14,50" fill="rgba(45,212,191,0.25)" stroke="#2dd4bf" stroke-width="3"/>
+                            <line x1="14" y1="50" x2="86" y2="50" stroke="#fbbf24" stroke-width="2" stroke-dasharray="3"/>
+                            <line x1="50" y1="14" x2="50" y2="86" stroke="#f87171" stroke-width="2" stroke-dasharray="3"/>
+                            <text x="50" y="45" fill="#fff" font-size="10" font-weight="bold" text-anchor="middle">d₁=8, d₂=6</text>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-teal-300 text-base">6. Belah Ketupat & Layang-Layang</h3>
+                        <div class="text-xs font-extrabold bg-teal-500/20 border border-teal-400/40 text-teal-200 px-2.5 py-1 rounded-lg inline-block my-1">
+                            Luas = ½ × diagonal 1 × diagonal 2 (½ × d₁ × d₂)
+                        </div>
+                        <p class="text-xs text-slate-300">Contoh: Jika <b class="text-white">d₁ = 8 cm</b> dan <b class="text-white">d₂ = 6 cm</b>:<br>Luas = ½ × 8 × 6 = <b class="text-emerald-400">24 cm²</b></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 bg-slate-900/90 border-t border-slate-700 text-center">
+                <button onclick="closeFormulaModal()" class="btn-game bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 font-extrabold px-8 py-2.5 rounded-xl text-sm">
+                    SIAP KEMBALI KE LINTASAN! 🏎️
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= SETTINGS / GEAR MENU MODAL (PENGATURAN SUARA, BACKSOUND & MENU UTAMA) ================= -->
+    <div id="settings-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/85 backdrop-blur-md p-4">
+        <div class="hud-panel-gold rounded-3xl max-w-md w-full p-5 sm:p-6 text-center border-2 border-amber-400 shadow-2xl">
+            <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-700">
+                <div class="flex items-center gap-2">
+                    <span class="text-2xl">⚙️</span>
+                    <h2 class="font-display text-xl sm:text-2xl font-bold text-amber-300">PENGATURAN & MENU</h2>
+                </div>
+                <button onclick="closeSettingsModal()" class="btn-game bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold w-9 h-9 rounded-xl text-sm border border-slate-600">
+                    ✕
+                </button>
+            </div>
+
+            <div class="space-y-3 text-left mb-5">
+                <!-- Toggle Efek Suara (SFX Mobil & Kuis) -->
+                <div class="bg-slate-900/90 border border-slate-700 rounded-2xl p-3.5 flex items-center justify-between gap-3">
+                    <div>
+                        <div class="font-bold text-sm sm:text-base text-white flex items-center gap-1.5">
+                            <span>🔊</span> <span>Efek Suara Mobil (SFX)</span>
+                        </div>
+                        <p class="text-[11px] text-slate-400">Suara mesin RPM, ban drift, turbo & bel kuis</p>
+                    </div>
+                    <button id="btn-toggle-sfx" onclick="toggleSfx()" class="btn-game bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold px-4 py-2.5 rounded-xl text-xs sm:text-sm min-w-[95px] text-center">
+                        AKTIF
+                    </button>
+                </div>
+
+                <!-- Toggle Backsound Musik Balap -->
+                <div class="bg-slate-900/90 border border-slate-700 rounded-2xl p-3.5 flex items-center justify-between gap-3">
+                    <div>
+                        <div class="font-bold text-sm sm:text-base text-white flex items-center gap-1.5">
+                            <span>🎵</span> <span>Backsound Musik Balap</span>
+                        </div>
+                        <p class="text-[11px] text-slate-400">Musik latar ritme arcade penyemangat balapan</p>
+                    </div>
+                    <button id="btn-toggle-bgm" onclick="toggleBgm()" class="btn-game bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold px-4 py-2.5 rounded-xl text-xs sm:text-sm min-w-[95px] text-center">
+                        AKTIF
+                    </button>
+                </div>
+
+                <!-- Buka Buku Rumus Cepat -->
+                <div class="bg-slate-900/90 border border-slate-700 rounded-2xl p-3.5 flex items-center justify-between gap-3">
+                    <div>
+                        <div class="font-bold text-sm sm:text-base text-amber-300 flex items-center gap-1.5">
+                            <span>📖</span> <span>Panduan Rumus Bangun Datar</span>
+                        </div>
+                        <p class="text-[11px] text-slate-400">Lihat ringkasan 6 rumus luas bangun datar</p>
+                    </div>
+                    <button onclick="closeSettingsModal(); openFormulaModal();" class="btn-game bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold px-4 py-2.5 rounded-xl text-xs sm:text-sm min-w-[95px] text-center">
+                        BUKA
+                    </button>
+                </div>
+
+                <!-- Mode Layar Penuh (Fullscreen untuk Papan Interaktif & HP Lanskap) -->
+                <div class="bg-slate-900/90 border border-slate-700 rounded-2xl p-3.5 flex items-center justify-between gap-3">
+                    <div>
+                        <div class="font-bold text-sm sm:text-base text-sky-300 flex items-center gap-1.5">
+                            <span>⛶</span> <span>Mode Layar Penuh (Fullscreen)</span>
+                        </div>
+                        <p class="text-[11px] text-slate-400">Optimal untuk Papan Interaktif Digital & HP Lanskap</p>
+                    </div>
+                    <button onclick="toggleFullScreen()" class="btn-game bg-sky-500 hover:bg-sky-400 text-slate-950 font-extrabold px-4 py-2.5 rounded-xl text-xs sm:text-sm min-w-[95px] text-center">
+                        LAYAR PENUH
+                    </button>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex flex-col gap-2.5">
+                <button onclick="closeSettingsModal()" class="btn-game w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-display font-bold py-3 rounded-2xl text-base shadow-lg">
+                    ▶️ LANJUTKAN BALAPAN
+                </button>
+                <button onclick="restartRaceFromSettings()" class="btn-game w-full bg-sky-600 hover:bg-sky-500 text-white font-extrabold py-2.5 rounded-2xl text-sm border border-sky-400/50">
+                    🔄 ULANGI BALAPAN DARI AWAL
+                </button>
+                <button onclick="returnToMainMenu()" class="btn-game w-full bg-rose-600 hover:bg-rose-500 text-white font-extrabold py-2.5 rounded-2xl text-sm border border-rose-400/50">
+                    🏠 KEMBALI KE MENU UTAMA
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= END RACE REPORT MODAL (RAPOR BALAPAN) ================= -->
+    <div id="end-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/90 backdrop-blur-md p-3 sm:p-6">
+        <div class="hud-panel-gold rounded-3xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden">
+            <div class="p-5 bg-slate-900/95 border-b border-slate-700 text-center">
+                <div class="text-xs font-extrabold uppercase tracking-widest text-amber-400">🏁 BALAPAN SELESAI!</div>
+                <h2 class="font-display text-2xl sm:text-4xl font-bold text-white mt-1" id="end-title">JUARA 1 PODIUM GEOMETRI! 🏆</h2>
+            </div>
+
+            <!-- Summary Stats -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-slate-900/60 border-b border-slate-800">
+                <div class="bg-slate-900 border border-slate-700 rounded-2xl p-3 text-center">
+                    <div class="text-xs text-slate-400 font-bold">POSISI AKHIR</div>
+                    <div class="font-display text-2xl sm:text-3xl font-bold text-amber-400 mt-1" id="end-rank">Juara 1</div>
+                </div>
+                <div class="bg-slate-900 border border-slate-700 rounded-2xl p-3 text-center">
+                    <div class="text-xs text-slate-400 font-bold">WAKTU TEMPUH</div>
+                    <div class="font-display text-2xl sm:text-3xl font-bold text-sky-400 mt-1" id="end-time">01:42.10</div>
+                </div>
+                <div class="bg-slate-900 border border-slate-700 rounded-2xl p-3 text-center">
+                    <div class="text-xs text-slate-400 font-bold">SKOR GEOMETRI</div>
+                    <div class="font-display text-2xl sm:text-3xl font-bold text-emerald-400 mt-1" id="end-score">800</div>
+                </div>
+                <div class="bg-slate-900 border border-slate-700 rounded-2xl p-3 text-center">
+                    <div class="text-xs text-slate-400 font-bold">AKURASI KUIS</div>
+                    <div class="font-display text-2xl sm:text-3xl font-bold text-purple-400 mt-1" id="end-accuracy">90%</div>
+                </div>
+            </div>
+
+            <!-- Question Log Table -->
+            <div class="p-4 flex-1 overflow-y-auto">
+                <h3 class="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-amber-300 mb-2">
+                    📊 RINCIAN SOAL LUAS BANGUN DATAR YANG DIKERJAKAN:
+                </h3>
+                <div class="overflow-x-auto rounded-xl border border-slate-700">
+                    <table class="w-full text-left text-xs sm:text-sm">
+                        <thead class="bg-slate-900 text-slate-300 uppercase text-[11px]">
+                            <tr>
+                                <th class="py-2.5 px-3">Bangun Datar</th>
+                                <th class="py-2.5 px-3">Ukuran Diketahui</th>
+                                <th class="py-2.5 px-3">Rumus & Penyelesaian</th>
+                                <th class="py-2.5 px-3">Jawabanmu</th>
+                                <th class="py-2.5 px-3 text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="end-log-body" class="divide-y divide-slate-800 bg-slate-950/60">
+                            <!-- Log rows injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="p-4 bg-slate-900/95 border-t border-slate-700 flex flex-wrap justify-center gap-3">
+                <button onclick="returnToMainMenu()" class="btn-game bg-slate-800 hover:bg-slate-700 text-rose-300 border border-rose-400/40 font-bold px-5 py-3 rounded-xl text-sm">
+                    🏠 Menu Utama
+                </button>
+                <button onclick="openFormulaModal()" class="btn-game bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-400/40 font-bold px-5 py-3 rounded-xl text-sm">
+                    📖 Buka Buku Rumus
+                </button>
+                <button onclick="restartRace()" class="btn-game bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-display font-bold px-8 py-3 rounded-xl text-base sm:text-lg">
+                    🔄 MAIN LAGI!
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MAIN GAME SCRIPT ================= -->
+    <script src="assets/js/images-data.js"></script>
+    <script src="assets/js/login.js"></script>
+    <script src="assets/js/game.js"></script>
+</body>
+</html>

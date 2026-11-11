@@ -1,0 +1,27 @@
+#login-page{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto;
+  background:linear-gradient(rgba(10,20,50,.45),rgba(10,20,50,.65)),url('../images/login-bg.jpg') center/cover no-repeat;font-family:'Nunito',sans-serif;color:#1d2b4f}
+.lg-card{width:100%;max-width:440px;background:rgba(255,255,255,.88);border:3px solid #ffb703;border-radius:24px;padding:28px;box-shadow:0 0 40px rgba(255,183,3,.45);backdrop-filter:blur(8px)}
+.lg-badge{display:inline-block;border:1px solid #ffb703;background:rgba(255,183,3,.15);color:#d48800;border-radius:99px;padding:4px 12px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.12em}
+.lg-title{font-family:'Fredoka',sans-serif;font-size:36px;font-weight:700;color:#e08a00;margin:10px 0 2px}
+.lg-sub{font-size:14px;font-weight:700;color:#5b6787;margin:0}
+.lg-card label{display:block;margin-top:18px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#d48800}
+.lg-card input{width:100%;box-sizing:border-box;margin-top:4px;border:2px solid #d7dcea;border-radius:12px;padding:12px 16px;font:700 16px 'Nunito',sans-serif;color:#1d2b4f;background:#fff;outline:none}
+.lg-card input:focus{border-color:#ffb703}
+.lg-btn{width:100%;margin-top:20px;border:0;border-radius:12px;padding:12px;background:#ffb703;color:#3a2500;font:700 18px 'Fredoka',sans-serif;box-shadow:0 4px 0 #b87d00;cursor:pointer}
+.lg-btn:active{transform:translateY(3px);box-shadow:0 1px 0 #b87d00}
+.lg-btn-2{width:100%;margin-top:12px;border:2px solid rgba(255,183,3,.6);border-radius:12px;padding:8px;background:rgba(255,183,3,.1);color:#d48800;font:800 13px 'Nunito',sans-serif;text-transform:uppercase;letter-spacing:.08em;cursor:pointer}
+.lg-note{margin:12px 0 0;text-align:center;font-size:12px;color:#5b6787}
+.lg-overlay{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.75)}
+.lg-overlay[hidden]{display:none}
+.lg-modal{position:relative;width:100%;max-width:680px;max-height:88vh;overflow-y:auto;background:#fff;border:3px solid #ffb703;border-radius:24px;padding:20px;color:#1d2b4f}
+.lg-modal img{width:100%;border-radius:16px;border:2px solid rgba(255,183,3,.5);display:block}
+.lg-modal h2{font-family:'Fredoka',sans-serif;color:#e08a00;font-size:24px;margin:16px 0 6px}
+.lg-modal p,.lg-modal li{font-size:14px;font-weight:600;line-height:1.55}
+.lg-modal ul{padding-left:4px;list-style:none;color:#5b6787}
+.lg-x{position:absolute;right:12px;top:12px;width:36px;height:36px;border-radius:50%;border:2px solid #ffb703;background:#fff;color:#e08a00;font-weight:700;cursor:pointer}
+.lg-dev{margin-top:12px;border:2px solid rgba(255,183,3,.5);background:rgba(255,183,3,.1);border-radius:16px;padding:14px;display:flex;flex-direction:column}
+.lg-dev small{font-size:11px;font-weight:800;letter-spacing:.12em;color:#d48800}
+.lg-dev b{font-family:'Fredoka',sans-serif;font-size:20px}
+.lg-dev span{font-size:14px;font-weight:700;color:#5b6787}
+#lg-exit{position:fixed;left:50%;transform:translateX(-50%);bottom:8px;z-index:9000;border:0;border-radius:99px;padding:4px 12px;background:rgba(255,255,255,.8);color:#1d2b4f;font:800 12px 'Nunito',sans-serif;cursor:pointer}
+#lg-exit[hidden]{display:none}
